@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kin-Ball Trainer Pro</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel pour compiler le JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --paper: #fbf8f0;
+      --chalk: #ffffff;
+      --ink: #172235;
+      --ink-soft: #515d6f;
+      --court: #118fca;
+      --court-deep: #0e6f9e;
+      --sun: #f4c52d;
+      --line: #e2ddd3;
+      --signal-grey: #8b9299;
+      --signal-black: #232a33;
+    }
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .font-display { font-family: system-ui, sans-serif; font-weight: 800; }
+    .font-mono-ui { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-ring { animation: pulse-ring 2s infinite ease-in-out; }
+
+    @keyframes dash-move {
+      to { stroke-dashoffset: -20; }
+    }
+    .animated-path {
+      stroke-dasharray: 6;
+      animation: dash-move 1s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // --- ICON WRAPPER ---
+    const Icon = ({ name, size = 18, className = "", fill = "none", strokeWidth = 2 }) => {
+      const iconRef = useRef(null);
+      useEffect(() => {
+        if (window.lucide && iconRef.current) {
+          iconRef.current.innerHTML = `<i data-lucide="${name}" style="width:${size}px; height:${size}px;"></i>`;
+          window.lucide.createIcons({
+            attrs: { strokeWidth, fill },
+            nameAttr: 'data-lucide'
+          });
+        }
+      }, [name, size, fill, strokeWidth]);
+      return <span ref={iconRef} className={`inline-flex items-center justify-center ${className}`} />;
+    };
+
+    // --- DATA ---
+    const SIGNALS = [
+      { name: 'BLEU', hex: '#118fca' },
+      { name: 'GRIS', hex: '#8b9299' },
+      { name: 'NOIR', hex: '#232a33' },
+    ];
+
+    const EXERCISES = {
+      appel: {
+        name: 'Appel couleur',
+        eyebrow: 'Réaction simple',
+        short: 'Un signal, un déplacement.',
+        description: 'Écoute une couleur, touche la cible correspondante puis reviens au centre.',
+        instruction: 'Touche la zone annoncée, puis reviens au centre avant le prochain appel.',
+        distanceLabel: 'Cibles couleur · 3 à 5 m du centre',
+        distanceCopy: 'Place 3 cibles (Bleu, Gris, Noir) en triangle ou autour de toi à 3–5 mètres du point de départ central.',
+        advice: 'Garde les appuis bas et prêts à exploser dans la direction annoncée. Reviens toujours activement au centre !',
+        steps: [
+          { title: '1. Position Neutre', desc: 'Debout au centre, regard haut, appuis fléchis et réactifs.' },
+          { title: '2. Lecture & Sprint', desc: 'À l’annonce vocale, pivote et sprinte vers la couleur dictée.' },
+          { title: '3. Toucher & Replanter', desc: 'Touche le plot ou la zone avec la main puis replace-toi aussitôt au centre.' }
+        ],
+        icon: 'zap',
+      },
+      'plot-sprint': {
+        name: 'Plot + sprint',
+        eyebrow: 'Départ explosif',
+        short: 'Plot d’abord. Couleur ensuite.',
+        description: 'Chaque séquence commence par le plot central, puis déclenche une couleur à sprinter.',
+        instruction: 'Touche le plot central, écoute la couleur, puis sprinte vers la cible annoncée.',
+        distanceLabel: 'Plot central · Cibles à 4–6 m',
+        distanceCopy: 'Positionne 1 plot central à tes pieds et répartis les 3 cibles couleur à 4–6 mètres d’intervalle.',
+        advice: 'Utilise le toucher du plot central comme déclencheur d’explosivité. Ne ralentis pas avant d’avoir touché la couleur.',
+        steps: [
+          { title: '1. Toucher Neutre', desc: 'Au départ du signal, touche impérativement le plot au sol devant toi.' },
+          { title: '2. Prise d’information', desc: 'Écoute l’ordre vocal donné pendant ou juste après ton contact au sol.' },
+          { title: '3. Sprint Long', desc: 'Explose immédiatement vers la cible couleur annoncée.' }
+        ],
+        icon: 'crosshair',
+      },
+      double: {
+        name: 'Double couleur',
+        eyebrow: 'Lecture en chaîne',
+        short: 'Deux couleurs. Une seule séquence.',
+        description: 'Mémorise deux couleurs distinctes annoncées à la suite, puis exécute le parcours.',
+        instruction: 'Repère les deux couleurs dans l’ordre exact annoncé, puis reviens au centre.',
+        distanceLabel: 'Cibles à 3–5 m les unes des autres',
+        distanceCopy: 'Organise un espace assez large pour enchaîner deux changements de direction rapides sans te croiser.',
+        advice: 'Ne précipite pas le premier déplacement : mémorise bien la séquence complète (ex: BLEU puis NOIR) dès l’annonce.',
+        steps: [
+          { title: '1. Écoute Double', desc: 'Enregistre mentalement les 2 couleurs annoncées à la suite.' },
+          { title: '2. Enchaînement', desc: 'Sprinte vers la 1ère cible, touche-la, puis enchaîne directement vers la 2ème.' },
+          { title: '3. Restitution', desc: 'Reviens au point central en trottinant activement pour la séquence suivante.' }
+        ],
+        icon: 'activity',
+      },
+      'double-centre-sprint': {
+        name: 'Double centre + sprint',
+        eyebrow: 'Centre puis longue sortie',
+        short: 'Gauche. Droite. Sprint couleur.',
+        description: 'Une couleur est annoncée : touche les deux plots proches au centre avant de sprinter vers la couleur lointaine.',
+        instruction: 'Couleur annoncée, touche plot gauche, plot droit, puis sprint long vers la couleur.',
+        distanceLabel: 'Plots proches ≤ 1 m · Cible longue ~ 6–7 m',
+        distanceCopy: 'Place 2 plots proches (1m) au centre pour le travail d’appuis courts, et les 3 cibles couleur plus loin (6-7m).',
+        advice: 'Travaille la vitesse d’appuis latéraux sur les 2 plots centraux avant d’envoyer une grande foulée sur le sprint.',
+        steps: [
+          { title: '1. Annonce & Appuis', desc: 'Écoute la couleur mais commence par toucher le plot central Gauche puis Droite.' },
+          { title: '2. Transition Rapide', desc: 'Transfère directement ton poids du corps vers l’extérieur dès le 2nd plot touché.' },
+          { title: '3. Grand Sprint', desc: 'Engage une accélération maximale vers la cible couleur au loin.' }
+        ],
+        icon: 'crosshair',
+      },
+    };
+
+    const DEFAULT_SETTINGS = {
+      appel: { work: 45, rest: 10 },
+      'plot-sprint': { work: 45, rest: 10 },
+      double: { work: 45, rest: 10 },
+      'double-centre-sprint': { work: 45, rest: 10 },
+    };
+
+    function formatDuration(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+    }
+
+    // --- COMPOSANTS UI ---
+    function BrandMark() {
+      return (
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-[var(--court)] shadow-[3px_3px_0_var(--sun)]">
+          <span className="font-display text-[25px] font-black leading-none text-[var(--ink)]">K</span>
+          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--paper)] bg-[var(--sun)]" />
+        </div>
+      );
+    }
+
+    function BrandLockup({ compact = false }) {
+      return (
+        <div className="flex items-center gap-3">
+          <BrandMark />
+          {!compact && (
+            <div className="leading-none">
+              <p className="font-display text-[21px] font-bold uppercase tracking-[.035em] text-[var(--chalk)]">Kin-Ball</p>
+              <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.2em] text-[var(--court)]">Trainer Pro</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function SectionLabel({ children, dark = false }) {
+      return (
+        <div className={`flex items-center gap-2 font-mono-ui text-[10px] font-medium uppercase tracking-[.18em] ${dark ? 'text-[rgba(245,240,229,.54)]' : 'text-[var(--ink-soft)]'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${dark ? 'bg-[var(--sun)]' : 'bg-[var(--court)]'}`} />
+          {children}
+        </div>
+      );
+    }
+
+    // --- DÉMONSTRATION ANIMÉE DU TERRAIN ---
+    function CourtAnimation({ exerciseId }) {
+      return (
+        <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-[rgba(245,240,229,.15)] bg-[var(--ink)] p-4">
+          <svg className="h-full w-full" viewBox="0 0 400 240" fill="none">
+            {/* Lignes du terrain Kin-Ball */}
+            <rect x="20" y="20" width="360" height="200" rx="12" stroke="rgba(255,255,255,0.15)" strokeWidth="2" strokeDasharray="4 4" />
+            
+            {/* Cibles couleur */}
+            {/* Bleu */}
+            <g transform="translate(80, 60)">
+              <circle r="16" fill="#118fca" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold" fontFamily="sans-serif">BLEU</text>
+            </g>
+            {/* Gris */}
+            <g transform="translate(320, 60)">
+              <circle r="16" fill="#8b9299" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold" fontFamily="sans-serif">GRIS</text>
+            </g>
+            {/* Noir */}
+            <g transform="translate(200, 190)">
+              <circle r="16" fill="#232a33" stroke="#ffffff" strokeWidth="1.5" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold" fontFamily="sans-serif">NOIR</text>
+            </g>
+
+            {/* Balle Omnikin au centre */}
+            <circle cx="200" cy="110" r="14" fill="#f4c52d" opacity="0.2" />
+            <circle cx="200" cy="110" r="8" fill="#f4c52d" />
+
+            {/* Trajectoires selon l'exercice */}
+            {exerciseId === 'appel' && (
+              <path d="M 200 110 L 80 60 M 80 60 L 200 110" stroke="#f4c52d" strokeWidth="2.5" className="animated-path" />
+            )}
+
+            {exerciseId === 'plot-sprint' && (
+              <>
+                <circle cx="200" cy="130" r="5" fill="#ffffff" />
+                <path d="M 200 110 L 200 130 L 320 60" stroke="#f4c52d" strokeWidth="2.5" className="animated-path" />
+              </>
+            )}
+
+            {exerciseId === 'double' && (
+              <path d="M 200 110 L 80 60 L 320 60 M 320 60 L 200 110" stroke="#f4c52d" strokeWidth="2.5" className="animated-path" />
+            )}
+
+            {exerciseId === 'double-centre-sprint' && (
+              <>
+                <circle cx="185" cy="110" r="4" fill="#ffffff" />
+                <circle cx="215" cy="110" r="4" fill="#ffffff" />
+                <path d="M 200 110 L 185 110 L 215 110 L 200 190" stroke="#f4c52d" strokeWidth="2.5" className="animated-path" />
+              </>
+            )}
+          </svg>
+          <div className="absolute bottom-3 left-3 rounded-md bg-[rgba(0,0,0,0.6)] px-2.5 py-1 font-mono-ui text-[9px] uppercase tracking-wider text-[var(--sun)] backdrop-blur-md">
+            ● Schéma animé des trajectoires
+          </div>
+        </div>
+      );
+    }
+
+    function DemoScreen({ exercise, onSelectExercise, onBack }) {
+      const ex = EXERCISES[exercise];
+
+      return (
+        <main className="mx-auto max-w-[1240px] px-5 pb-16 pt-8 sm:px-8 lg:px-12">
+          <div className="flex items-center justify-between border-b border-[var(--line)] pb-5">
+            <div>
+              <SectionLabel>Démonstration & Tactique</SectionLabel>
+              <h1 className="mt-1 font-display text-3xl font-bold uppercase tracking-[-.02em]">Le Geste Technique</h1>
+            </div>
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--chalk)] px-4 py-2 font-mono-ui text-xs uppercase font-semibold text-[var(--ink)] shadow-sm hover:bg-[var(--paper)]"
+            >
+              <Icon name="arrow-left" size={15} /> Retour
+            </button>
+          </div>
+
+          {/* Onglets d'exercices */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {Object.keys(EXERCISES).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSelectExercise(id)}
+                className={`rounded-xl px-4 py-2.5 font-display text-xs uppercase transition-all ${exercise === id ? 'bg-[var(--ink)] text-[var(--chalk)] shadow-[3px_3px_0_var(--sun)]' : 'bg-[var(--chalk)] text-[var(--ink-soft)] border border-[var(--line)] hover:border-[var(--ink)]'}`}
+              >
+                {EXERCISES[id].name}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-8 grid gap-8 lg:grid-cols-12">
+            {/* Visualisation animée */}
+            <div className="space-y-6 lg:col-span-7">
+              <CourtAnimation exerciseId={exercise} />
+
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--chalk)] p-6">
+                <SectionLabel>Installation & Distances</SectionLabel>
+                <h3 className="mt-2 font-display text-lg font-bold uppercase text-[var(--ink)]">{ex.distanceLabel}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ink-soft)]">{ex.distanceCopy}</p>
+              </div>
+            </div>
+
+            {/* Étapes & Conseils */}
+            <div className="space-y-6 lg:col-span-5">
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--chalk)] p-6">
+                <SectionLabel>Étapes d'exécution</SectionLabel>
+                <div className="mt-4 space-y-4">
+                  {ex.steps.map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-3 border-b border-[var(--line)] pb-3 last:border-0 last:pb-0">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--court)] font-mono-ui text-xs font-bold text-[var(--ink)]">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <h4 className="font-display text-sm font-bold uppercase text-[var(--ink)]">{step.title}</h4>
+                        <p className="mt-1 text-xs text-[var(--ink-soft)]">{step.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--sun)] bg-[rgba(244,197,45,0.1)] p-6">
+                <div className="flex items-center gap-2 font-display text-xs uppercase font-bold text-[var(--ink)]">
+                  <Icon name="lightbulb" size={16} className="text-[var(--ink)]" />
+                  <span>Conseil du coach</span>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--ink)] font-medium">{ex.advice}</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    function Shell({ children, screen, onNavigate }) {
+      const [mobileOpen, setMobileOpen] = useState(false);
+      const navigation = [
+        { id: 'menu', label: 'Session', icon: 'activity' },
+        { id: 'demo', label: 'Le geste', icon: 'crosshair' },
+      ];
+
+      return (
+        <div className="min-h-[100dvh] bg-[var(--paper)] text-[var(--ink)]">
+          <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col bg-[var(--ink)] px-6 py-7 text-[var(--chalk)] lg:flex">
+            <BrandLockup />
+            <div className="mt-20">
+              <SectionLabel dark>Zone d'entraînement</SectionLabel>
+              <nav className="mt-5 space-y-2">
+                {navigation.map(({ id, label, icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onNavigate(id)}
+                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-all duration-200 ${screen === id ? 'bg-[var(--court)] text-[var(--ink)] shadow-[3px_3px_0_var(--sun)]' : 'text-[rgba(245,240,229,.62)] hover:bg-[rgba(245,240,229,.08)] hover:text-[var(--chalk)]'}`}
+                  >
+                    <Icon name={icon} size={17} strokeWidth={2.2} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </aside>
+
+          <div className="lg:pl-[232px]">
+            <header className="flex items-center justify-between border-b border-[var(--line)] bg-[rgba(251,248,240,.88)] px-5 py-4 backdrop-blur-md sm:px-8 lg:hidden">
+              <BrandLockup compact />
+              <button
+                type="button"
+                onClick={() => setMobileOpen((v) => !v)}
+                className="rounded-xl border border-[var(--line)] p-2.5 text-[var(--ink)]"
+              >
+                <Icon name={mobileOpen ? "x" : "menu"} size={19} />
+              </button>
+            </header>
+            {mobileOpen && (
+              <div className="border-b border-[var(--line)] bg-[var(--paper)] px-5 pb-4 lg:hidden">
+                <nav className="flex gap-2">
+                  {navigation.map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => { onNavigate(id); setMobileOpen(false); }}
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${screen === id ? 'bg-[var(--court)] text-[var(--ink)]' : 'bg-[var(--chalk)] text-[var(--ink-soft)]'}`}
+                    >
+                      <Icon name={icon} size={15} /> {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )}
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Header({ onInfo, exercise }) {
+      return (
+        <header className="mx-auto flex max-w-[1240px] items-center justify-between px-5 pb-5 pt-7 sm:px-8 lg:px-12 lg:pt-9">
+          <div>
+            <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[var(--ink-soft)]">Espace personnel / 01</p>
+            <h1 className="mt-2 font-display text-3xl font-bold uppercase tracking-[-.02em] sm:text-[35px]">Kin-Ball Trainer <span className="text-[var(--court)]">Pro</span></h1>
+            <p className="mt-2 font-mono-ui text-[9px] uppercase tracking-[.16em] text-[var(--court-deep)]">Drill actif · {EXERCISES[exercise].name}</p>
+          </div>
+        </header>
+      );
+    }
+
+    function MenuScreen({ exercise, settings, onExerciseChange, onSettingChange, onStart, onDemo }) {
+      const current = settings[exercise];
+      const ids = ['appel', 'plot-sprint', 'double', 'double-centre-sprint'];
+
+      return (
+        <main className="mx-auto max-w-[1240px] px-5 pb-12 sm:px-8 lg:px-12">
+          <Header exercise={exercise} />
+          
+          <section className="mt-4">
+            <SectionLabel>Choix du bloc</SectionLabel>
+            <h2 className="mt-2 font-display text-[30px] font-bold uppercase tracking-[-.02em]">Quel exercice aujourd'hui ?</h2>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {ids.map((id, index) => {
+                const ex = EXERCISES[id];
+                const isSelected = exercise === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onExerciseChange(id)}
+                    className={`group relative overflow-hidden rounded-[22px] border p-5 text-left transition-all duration-200 ${isSelected ? 'border-[var(--ink)] bg-[var(--ink)] text-[var(--chalk)] shadow-[5px_5px_0_var(--sun)]' : 'border-[var(--line)] bg-[var(--chalk)] hover:-translate-y-0.5'}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${isSelected ? 'bg-[var(--court)] text-[var(--ink)]' : 'bg-[var(--paper)] text-[var(--court-deep)]'}`}>
+                        <Icon name={ex.icon} size={19} />
+                      </span>
+                      <span className="font-mono-ui text-[9px]">0{index + 1}</span>
+                    </div>
+                    <p className={`mt-5 font-mono-ui text-[9px] uppercase tracking-[.16em] ${isSelected ? 'text-[var(--sun)]' : 'text-[var(--court-deep)]'}`}>{ex.eyebrow}</p>
+                    <h3 className="mt-1 font-display text-[26px] font-bold uppercase leading-none">{ex.name}</h3>
+                    <p className={`mt-2 text-xs ${isSelected ? 'text-[rgba(245,240,229,.62)]' : 'text-[var(--ink-soft)]'}`}>{ex.short}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="mt-7 grid gap-5 lg:grid-cols-2">
+            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--chalk)] p-6">
+              <SectionLabel>Réglage du rythme</SectionLabel>
+              <div className="mt-5 space-y-4">
+                <div>
+                  <div className="flex justify-between font-mono-ui text-xs"><span>Travail</span><strong>{current.work}s</strong></div>
+                  <input type="range" min={15} max={120} value={current.work} onChange={(e) => onSettingChange('work', Number(e.target.value))} className="w-full accent-[var(--court)]" />
+                </div>
+                <div>
+                  <div className="flex justify-between font-mono-ui text-xs"><span>Repos</span><strong>{current.rest}s</strong></div>
+                  <input type="range" min={3} max={20} value={current.rest} onChange={(e) => onSettingChange('rest', Number(e.target.value))} className="w-full accent-[var(--court)]" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-between gap-4">
+              <button
+                type="button"
+                onClick={onStart}
+                className="flex min-h-[62px] w-full items-center justify-between rounded-2xl bg-[var(--court)] px-6 font-display text-[22px] font-bold uppercase text-[var(--ink)] shadow-[5px_5px_0_var(--sun)] hover:-translate-y-0.5"
+              >
+                <span>Démarrer {EXERCISES[exercise].name}</span>
+                <Icon name="play" size={20} fill="currentColor" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onDemo}
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-[var(--line)] bg-white font-display text-[18px] font-bold uppercase text-[var(--ink)]"
+              >
+                <Icon name="crosshair" size={18} /> Voir le geste & tactique
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    function TrainingScreen({ exercise, work, phase, signals, sessionLeft, restLeft, signalCount, onStop }) {
+      const detail = EXERCISES[exercise];
+      const progress = Math.max(0, Math.min(100, ((work - sessionLeft) / work) * 100));
+
+      return (
+        <main className="min-h-[100dvh] bg-[var(--ink)] px-5 py-6 text-[var(--chalk)] sm:px-8 lg:px-12">
+          <div className="mx-auto max-w-[1120px]">
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={onStop} className="flex items-center gap-2 font-mono-ui text-[10px] uppercase text-[rgba(245,240,229,.58)]">
+                <Icon name="arrow-left" size={15} /> Quitter
+              </button>
+              <div className="font-mono-ui text-[10px] uppercase text-[var(--court)]">En cours</div>
+            </div>
+
+            <div className="mt-8 flex items-end justify-between border-b border-[rgba(245,240,229,.13)] pb-4">
+              <div>
+                <SectionLabel dark>{detail.name}</SectionLabel>
+                <p className="mt-2 font-mono-ui text-xs text-[rgba(245,240,229,.5)]">{detail.instruction}</p>
+              </div>
+              <div className="font-mono-ui text-3xl font-bold">{formatDuration(sessionLeft)}</div>
+            </div>
+
+            <div className="my-12 text-center">
+              {phase === 'ready' ? (
+                <div className="font-display text-5xl font-black text-[var(--chalk)]">PRÉPARE-TOI</div>
+              ) : (
+                <div className="inline-block rounded-3xl p-8 text-center" style={{ backgroundColor: signals[0]?.hex || 'var(--court)' }}>
+                  <p className="font-mono-ui text-xs uppercase text-white/80">Séquence #{signalCount}</p>
+                  <h1 className="mt-2 font-display text-6xl font-black uppercase text-white">
+                    {signals.map(s => s.name).join(' + ')}
+                  </h1>
+                </div>
+              )}
+              {phase === 'rest' && <p className="mt-6 font-mono-ui text-sm text-[var(--sun)]">Repos : {restLeft}s</p>}
+            </div>
+
+            <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full bg-[var(--court)] transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+
+            <div className="mt-8 text-center">
+              <button type="button" onClick={onStop} className="rounded-full border border-white/20 px-6 py-2 font-mono-ui text-xs uppercase text-white/70 hover:border-red-400 hover:text-red-400">
+                Arrêter
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    function App() {
+      const [screen, setScreen] = useState('menu');
+      const [selectedExercise, setSelectedExercise] = useState('appel');
+      const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+      const [activeSession, setActiveSession] = useState(null);
+      const [phase, setPhase] = useState('ready');
+      const [signals, setSignals] = useState([]);
+      const [sequenceCount, setSequenceCount] = useState(0);
+      const [sessionLeft, setSessionLeft] = useState(45);
+      const [restLeft, setRestLeft] = useState(0);
+      const [sessionEndAt, setSessionEndAt] = useState(null);
+      const [nextSignalAt, setNextSignalAt] = useState(null);
+      const [restDeadline, setRestDeadline] = useState(null);
+      const [now, setNow] = useState(Date.now());
+
+      const speak = useCallback((text) => {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'fr-FR';
+        utterance.rate = 1.8;
+        window.speechSynthesis.speak(utterance);
+      }, []);
+
+      const stopSpeech = useCallback(() => {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }, []);
+
+      const triggerSequence = useCallback((timestamp, config) => {
+        let nextSignals;
+        if (config.exercise === 'double') {
+          const first = Math.floor(Math.random() * SIGNALS.length);
+          let second = Math.floor(Math.random() * SIGNALS.length);
+          while (second === first) second = Math.floor(Math.random() * SIGNALS.length);
+          nextSignals = [SIGNALS[first], SIGNALS[second]];
+        } else {
+          nextSignals = [SIGNALS[Math.floor(Math.random() * SIGNALS.length)]];
+        }
+        setSignals(nextSignals);
+        setSequenceCount((v) => v + 1);
+        setPhase('rest');
+        setRestLeft(config.rest);
+        setRestDeadline(timestamp + config.rest * 1000);
+
+        if (config.exercise === 'plot-sprint') speak(`Touche le plot, puis ${nextSignals[0].name}`);
+        else if (config.exercise === 'double') speak(`${nextSignals[0].name} puis ${nextSignals[1].name}`);
+        else speak(`Omnikin ${nextSignals[0].name}`);
+      }, [speak]);
+
+      useEffect(() => {
+        if (screen !== 'training' || !sessionEndAt) return;
+        const interval = setInterval(() => setNow(Date.now()), 200);
+        return () => clearInterval(interval);
+      }, [screen, sessionEndAt]);
+
+      useEffect(() => {
+        if (screen !== 'training' || !sessionEndAt || !activeSession) return;
+        const remaining = Math.max(0, Math.ceil((sessionEndAt - now) / 1000));
+        setSessionLeft(remaining);
+
+        if (remaining <= 0) {
+          setScreen('menu');
+          stopSpeech();
+          return;
+        }
+
+        if (phase === 'ready' && nextSignalAt && now >= nextSignalAt) {
+          triggerSequence(now, activeSession);
+          setNextSignalAt(null);
+        } else if (phase === 'rest' && restDeadline) {
+          const restRem = Math.max(0, Math.ceil((restDeadline - now) / 1000));
+          setRestLeft(restRem);
+          if (now >= restDeadline) triggerSequence(now, activeSession);
+        }
+      }, [now, screen, sessionEndAt, activeSession, phase, nextSignalAt, restDeadline, triggerSequence, stopSpeech]);
+
+      const startTraining = () => {
+        stopSpeech();
+        const config = { exercise: selectedExercise, ...settings[selectedExercise] };
+        const startedAt = Date.now();
+        setActiveSession(config);
+        setSignals([]);
+        setSequenceCount(0);
+        setPhase('ready');
+        setSessionLeft(config.work);
+        setRestLeft(0);
+        setSessionEndAt(startedAt + config.work * 1000);
+        setNextSignalAt(startedAt + 2000);
+        setRestDeadline(null);
+        setNow(startedAt);
+        setScreen('training');
+      };
+
+      const stopTraining = () => {
+        stopSpeech();
+        setSessionEndAt(null);
+        setActiveSession(null);
+        setScreen('menu');
+      };
+
+      return (
+        <Shell screen={screen} onNavigate={(s) => setScreen(s)}>
+          {screen === 'menu' && (
+            <MenuScreen
+              exercise={selectedExercise}
+              settings={settings}
+              onExerciseChange={setSelectedExercise}
+              onSettingChange={(k, v) => setSettings(p => ({ ...p, [selectedExercise]: { ...p[selectedExercise], [k]: v } }))}
+              onStart={startTraining}
+              onDemo={() => setScreen('demo')}
+            />
+          )}
+          {screen === 'demo' && (
+            <DemoScreen
+              exercise={selectedExercise}
+              onSelectExercise={setSelectedExercise}
+              onBack={() => setScreen('menu')}
+            />
+          )}
+          {screen === 'training' && activeSession && (
+            <TrainingScreen
+              exercise={activeSession.exercise}
+              work={activeSession.work}
+              phase={phase}
+              signals={signals}
+              sessionLeft={sessionLeft}
+              restLeft={restLeft}
+              signalCount={sequenceCount}
+              onStop={stopTraining}
+            />
+          )}
+        </Shell>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

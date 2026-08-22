@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kin-Ball Trainer</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --paper: #fbf8f0;
+      --chalk: #ffffff;
+      --ink: #172235;
+      --ink-soft: #515d6f;
+      --court: #118fca;
+      --court-deep: #0e6f9e;
+      --sun: #f4c52d;
+      --line: #e2ddd3;
+    }
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .font-display { font-family: system-ui, sans-serif; font-weight: 800; }
+    .font-mono-ui { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    @keyframes dash-move {
+      to { stroke-dashoffset: -20; }
+    }
+    .animated-path {
+      stroke-dasharray: 6;
+      animation: dash-move 1s linear infinite;
+    }
+
+    .kinball-menu-btn {
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .kinball-menu-btn:hover {
+      transform: scale(1.08);
+    }
+    .kinball-menu-btn.open {
+      transform: rotate(180deg);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swCode = `
+          const CACHE_NAME = 'kinball-trainer-v3';
+          const URLS_TO_CACHE = [
+            './',
+            './Kin ball trainer.html',
+            './images/20260815_152922_0000.png',
+            'https://cdn.tailwindcss.com',
+            'https://unpkg.com/react@18/umd/react.production.min.js',
+            'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+            'https://unpkg.com/@babel/standalone/babel.min.js',
+            'https://unpkg.com/lucide@latest'
+          ];
+
+          self.addEventListener('install', (e) => {
+            e.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.addAll(URLS_TO_CACHE))
+            );
+          });
+
+          self.addEventListener('fetch', (e) => {
+            e.respondWith(
+              caches.match(e.request).then((res) => res || fetch(e.request))
+            );
+          });
+        `;
+        
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        
+        navigator.serviceWorker.register(swUrl).catch((err) => {
+          console.log('Erreur SW:', err);
+        });
+      });
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const Icon = ({ name, size = 18, className = "", fill = "none", strokeWidth = 2 }) => {
+      const iconRef = useRef(null);
+      useEffect(() => {
+        if (window.lucide && iconRef.current) {
+          iconRef.current.innerHTML = `<i data-lucide="${name}" style="width:${size}px; height:${size}px;"></i>`;
+          window.lucide.createIcons({
+            attrs: { strokeWidth, fill },
+            nameAttr: 'data-lucide'
+          });
+        }
+      }, [name, size, fill, strokeWidth]);
+      return <span ref={iconRef} className={`inline-flex items-center justify-center ${className}`} />;
+    };
+
+    function CoatiVector({ className = "", size = "w-24 h-24" }) {
+      const [imgError, setImgError] = useState(false);
+
+      if (imgError) {
+        return (
+          <div className={`shrink-0 flex items-center justify-center rounded-2xl bg-amber-100 border border-amber-300 ${size} ${className}`}>
+            <Icon name="smile" size={32} className="text-amber-600" />
+          </div>
+        );
+      }
+
+      return (
+        <div className={`shrink-0 flex items-center justify-center ${className}`}>
+          <img 
+            src="images/20260815_152922_0000.png" 
+            alt="Mascotte Coati" 
+            onError={() => setImgError(true)}
+            className={`${size} object-contain mix-blend-multiply`}
+          />
+        </div>
+      );
+    }
+
+    function KinBallVector({ size = 28, className = "", color = "var(--chalk)" }) {
+      return (
+        <svg viewBox="0 0 100 100" style={{ width: size, height: size }} className={`fill-none ${className}`}>
+          <circle cx="50" cy="50" r="44" stroke={color} strokeWidth="5" />
+          <circle cx="50" cy="50" r="30" stroke={color} strokeWidth="5" />
+          <line x1="20" y1="50" x2="80" y2="50" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="50" y1="6" x2="50" y2="20" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="50" y1="80" x2="50" y2="94" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="28.8" y1="28.8" x2="18.9" y2="18.9" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="71.2" y1="28.8" x2="81.1" y2="18.9" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="28.8" y1="71.2" x2="18.9" y2="81.1" stroke={color} strokeWidth="5" strokeLinecap="round" />
+          <line x1="71.2" y1="71.2" x2="81.1" y2="81.1" stroke={color} strokeWidth="5" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    const ALL_SIGNALS = [
+      { id: 'BLEU', name: 'BLEU', hex: '#118fca' },
+      { id: 'GRIS', name: 'GRIS', hex: '#8b9299' },
+      { id: 'NOIR', name: 'NOIR', hex: '#232a33' },
+    ];
+
+    const WARMUP_EXERCISES = [
+      {
+        id: 'ex1',
+        title: 'Mobilité chevilles & genoux',
+        duration: '1 min',
+        muscles: ['Chevilles', 'Genoux', 'Mollets'],
+        desc: 'Rotations douces, fentes avant dynamiques légères pour préparer les articulations aux arrêts nets.',
+        advice: 'Ne force pas sur les amplitudes au début, augmente progressivement la vitesse.',
+        icon: 'activity'
+      },
+      {
+        id: 'ex2',
+        title: 'Montées de genoux & Pas chassés',
+        duration: '2 min',
+        muscles: ['Quadri', 'Ischios', 'Cardio'],
+        desc: 'Activation cardiovasculaire progressive. Alterner 10m de pas chassés et courses légères.',
+        advice: 'Garde le buste bien droit et les appuis souples sur le devant des pieds.',
+        icon: 'zap'
+      },
+      {
+        id: 'ex3',
+        title: 'Changements d’appuis courts',
+        duration: '1 min',
+        muscles: ['Adducteurs', 'Fessiers', 'Réactivité'],
+        desc: 'Petits sursauts sur place, décalages rapides pieds gauches/droite pour réveiller le système nerveux.',
+        advice: 'Maintiens une fréquence de pas très rapide tout en restant bas sur tes jambes.',
+        icon: 'flame'
+      },
+      {
+        id: 'ex4',
+        title: 'Ouverture de hanches & Squats dynamiques',
+        duration: '1 min',
+        muscles: ['Hanches', 'Fessiers', 'Lombaires'],
+        desc: 'Circumductions des hanches suivies de squats légers pour engager le bas du corps.',
+        advice: 'Pousse bien les fesses vers l\'arrière et garde le talon ancré au sol.',
+        icon: 'repeat'
+      }
+    ];
+
+    const DIFFICULTY_LEVELS = {
+      niveau1: {
+        id: 'niveau1',
+        label: 'Niv. 1 · Éléments / Maison',
+        badge: '🟢 Appuis courts',
+        distanceMeters: '1.5 à 2.5m',
+        scaleFactor: 0.45,
+        targetRadius: 16,
+        description: 'Espace restreint (salon, jardin). Travail axé sur la vitesse de réaction réflexe.',
+        objective: 'Fréquence de pas maximale sans prise d’élan.'
+      },
+      niveau2: {
+        id: 'niveau2',
+        label: 'Niv. 2 · Intermédiaire',
+        badge: '🟡 Explosivité & Démarrage',
+        distanceMeters: '3.5 à 5m',
+        scaleFactor: 0.75,
+        targetRadius: 18,
+        description: 'Travail de la puissance du premier pas. Proche des déplacements réels en défense de zone.',
+        objective: 'Pousser fort sur la jambe d’appui pour exploser.'
+      },
+      niveau3: {
+        id: 'niveau3',
+        label: 'Niv. 3 · Pro / Match',
+        badge: '🔴 Vitesse Max',
+        distanceMeters: '6 à 8+m',
+        scaleFactor: 0.95,
+        targetRadius: 20,
+        description: 'Configuration match grand terrain. Exige un sprint maximal et une décélération maîtrisée.',
+        objective: 'Conserver la vitesse de pointe.'
+      }
+    };
+
+    const EXERCISES = {
+      appel: {
+        id: 'appel',
+        name: 'Appel couleur',
+        eyebrow: 'Réaction simple',
+        short: 'Un signal, un déplacement court ou long.',
+        description: 'Écoute une couleur, touche la cible correspondante puis reviens au centre.',
+        instruction: 'Touche la zone annoncée, puis reviens au centre avant le prochain appel.',
+        advice: 'Travaille l’impulsion explosive sur les premiers pas. Garde les genoux fléchis.',
+        steps: [
+          { title: '1. Position Neutre', desc: 'Debout au centre, appuis légers sur l’avant des pieds.' },
+          { title: '2. Prise d’info', desc: 'Pivote directement vers la couleur dès le signal sonore.' },
+          { title: '3. Toucher & Replace', desc: 'Touche le repère puis réenclenche immédiatement le retour au centre.' }
+        ],
+        icon: 'zap',
+      },
+      'plot-sprint': {
+        id: 'plot-sprint',
+        name: 'Plot + sprint',
+        eyebrow: 'Départ explosif',
+        short: 'Touche le sol d’abord. Couleur ensuite.',
+        description: 'Chaque séquence commence par le plot au sol, puis déclenche une direction.',
+        instruction: 'Touche le sol/plot central, écoute la couleur, puis touche la zone.',
+        advice: 'Descends bien le bassin au centre pour optimiser la poussée des cuisses.',
+        steps: [
+          { title: '1. Flexion & Toucher', desc: 'Au signal, touche le repère au sol entre tes pieds.' },
+          { title: '2. Écoute', desc: 'Annonce vocale lue pendant ta flexion.' },
+          { title: '3. Sortie rapide', desc: 'Explose vers la direction dictée.' }
+        ],
+        icon: 'crosshair',
+      },
+      double: {
+        id: 'double',
+        name: 'Double couleur',
+        eyebrow: 'Lecture en chaîne',
+        short: 'Deux couleurs. Enchaînement rapide.',
+        description: 'Mémorise deux couleurs distinctes annoncées à la suite, puis exécute le parcours.',
+        instruction: 'Repère les deux couleurs dans l’ordre exact annoncé, puis reviens au centre.',
+        advice: 'Ne précipite pas la foulée : mémorise bien la séquence complète dès l’annonce.',
+        steps: [
+          { title: '1. Écoute Double', desc: 'Enregistre mentalement les 2 couleurs annoncées.' },
+          { title: '2. Enchaînement', desc: 'Sprinte vers la 1ère cible, touche-la, puis enchaîne vers la 2ème.' },
+          { title: '3. Restitution', desc: 'Reviens au point central pour la séquence suivante.' }
+        ],
+        icon: 'activity',
+      },
+      'double-centre-sprint': {
+        id: 'double-centre-sprint',
+        name: 'Double centre + sprint',
+        eyebrow: 'Appuis courts + Sortie',
+        short: 'Gauche. Droite. Sprint couleur.',
+        description: 'Touche les deux plots proches au centre avant de sprinter vers la couleur au loin.',
+        instruction: 'Couleur annoncée, touche plot gauche, plot droit, puis sprint vers la couleur.',
+        advice: 'Travaille la vitesse d’appuis latéraux au centre avant d’engager la grande foulée.',
+        steps: [
+          { title: '1. Annonce & Appuis', desc: 'Écoute la couleur mais touche le plot central Gauche puis Droite.' },
+          { title: '2. Transition Rapide', desc: 'Transfère directement ton poids du corps vers la cible.' },
+          { title: '3. Grand Sprint', desc: 'Engage une accélération maximale vers la cible couleur.' }
+        ],
+        icon: 'repeat',
+      },
+    };
+
+    const DEFAULT_CONFIGS = {
+      appel: { work: 60, restFixed: 4, isRandomRest: true, restMin: 3, restMax: 8, countdown: 3, colors: ['BLEU', 'GRIS', 'NOIR'], level: 'niveau1' },
+      'plot-sprint': { work: 60, restFixed: 5, isRandomRest: true, restMin: 3, restMax: 8, countdown: 3, colors: ['BLEU', 'GRIS', 'NOIR'], level: 'niveau2' },
+      double: { work: 60, restFixed: 6, isRandomRest: false, restMin: 4, restMax: 8, countdown: 3, colors: ['BLEU', 'GRIS', 'NOIR'], level: 'niveau2' },
+      'double-centre-sprint': { work: 60, restFixed: 6, isRandomRest: false, restMin: 4, restMax: 8, countdown: 3, colors: ['BLEU', 'GRIS', 'NOIR'], level: 'niveau2' },
+    };
+
+    function formatDuration(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+    }
+
+    function BrandLockup({ compact = false, onClick }) {
+      return (
+        <button 
+          type="button" 
+          onClick={onClick}
+          className="flex items-center gap-3 text-left focus:outline-none group transition-transform hover:opacity-90"
+        >
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--court)] shadow-[3px_3px_0_var(--sun)] transition-transform group-hover:scale-105">
+            <KinBallVector size={26} color="var(--ink)" />
+          </div>
+          {!compact && (
+            <div className="leading-none">
+              <p className="font-display text-[21px] font-bold uppercase tracking-[.035em] text-[var(--chalk)]">Kin-Ball</p>
+              <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.2em] text-[var(--court)]">Trainer</p>
+            </div>
+          )}
+        </button>
+      );
+    }
+
+    function KinBallMenuButton({ isOpen, onClick }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          className={`kinball-menu-btn relative flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ink)] shadow-[2px_2px_0_var(--sun)] border-2 border-[var(--court)] ${isOpen ? 'open' : ''}`}
+        >
+          {isOpen ? <Icon name="x" size={22} className="text-[var(--sun)]" /> : <KinBallVector size={28} color="var(--chalk)" />}
+        </button>
+      );
+    }
+
+    function SectionLabel({ children, dark = false }) {
+      return (
+        <div className={`flex items-center gap-2 font-mono-ui text-[10px] font-medium uppercase tracking-[.18em] ${dark ? 'text-[rgba(245,240,229,.54)]' : 'text-[var(--ink-soft)]'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${dark ? 'bg-[var(--sun)]' : 'bg-[var(--court)]'}`} />
+          {children}
+        </div>
+      );
+    }
+
+    function CourtAnimation({ exerciseId, difficultyLevel }) {
+      const levelConfig = DIFFICULTY_LEVELS[difficultyLevel] || DIFFICULTY_LEVELS.niveau1;
+      const factor = levelConfig.scaleFactor;
+      
+      const bleuX = 250 - (120 * factor);
+      const bleuY = 250 - (120 * factor);
+      const grisX = 250 + (120 * factor);
+      const grisY = 250 - (120 * factor);
+      const noirX = 250;
+      const noirY = 250 + (140 * factor);
+
+      return (
+        <div className="relative aspect-square w-full max-w-[420px] mx-auto overflow-hidden rounded-2xl border border-[rgba(245,240,229,.2)] bg-[var(--ink)] p-4 shadow-inner">
+          <svg className="h-full w-full" viewBox="0 0 500 500" fill="none">
+            <defs>
+              <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+              </pattern>
+              <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#f4c52d" />
+              </marker>
+            </defs>
+
+            <rect x="40" y="40" width="420" height="420" fill="url(#grid)" />
+            <rect x="40" y="40" width="420" height="420" rx="6" stroke="#118fca" strokeWidth="3" opacity="0.6" />
+
+            <line x1="250" y1="250" x2={bleuX} y2={bleuY} stroke="rgba(244, 197, 45, 0.3)" strokeWidth="1.5" strokeDasharray="4 4" />
+            <text x={(250 + bleuX) / 2 - 10} y={(250 + bleuY) / 2 - 10} fill="#f4c52d" fontSize="11" fontWeight="bold" fontFamily="monospace">
+              {levelConfig.distanceMeters}
+            </text>
+
+            <circle cx="250" cy="250" r="6" fill="#f4c52d" />
+            <circle cx="250" cy="250" r="20" stroke="#f4c52d" strokeWidth="1.5" strokeDasharray="3 3" />
+
+            <g transform={`translate(${bleuX}, ${bleuY})`}>
+              <circle r={levelConfig.targetRadius} fill="#118fca" stroke="#ffffff" strokeWidth="2" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold">BLEU</text>
+            </g>
+            <g transform={`translate(${grisX}, ${grisY})`}>
+              <circle r={levelConfig.targetRadius} fill="#8b9299" stroke="#ffffff" strokeWidth="2" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold">GRIS</text>
+            </g>
+            <g transform={`translate(${noirX}, ${noirY})`}>
+              <circle r={levelConfig.targetRadius} fill="#232a33" stroke="#ffffff" strokeWidth="2" />
+              <text y="4" textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold">NOIR</text>
+            </g>
+
+            {exerciseId === 'appel' && (
+              <path d={`M 250 250 L ${bleuX} ${bleuY} L 250 250`} stroke="#f4c52d" strokeWidth="3" className="animated-path" markerEnd="url(#arrow)" />
+            )}
+            {exerciseId === 'plot-sprint' && (
+              <>
+                <circle cx="250" cy="280" r="5" fill="#ffffff" />
+                <path d={`M 250 250 L 250 280 L ${grisX} ${grisY}`} stroke="#f4c52d" strokeWidth="3" className="animated-path" markerEnd="url(#arrow)" />
+              </>
+            )}
+            {exerciseId === 'double' && (
+              <path d={`M 250 250 L ${bleuX} ${bleuY} L ${grisX} ${grisY} L 250 250`} stroke="#f4c52d" strokeWidth="3" className="animated-path" markerEnd="url(#arrow)" />
+            )}
+            {exerciseId === 'double-centre-sprint' && (
+              <>
+                <circle cx="230" cy="250" r="5" fill="#ffffff" />
+                <circle cx="270" cy="250" r="5" fill="#ffffff" />
+                <path d={`M 250 250 L 230 250 L 270 250 L ${noirX} ${noirY}`} stroke="#f4c52d" strokeWidth="3" className="animated-path" markerEnd="url(#arrow)" />
+              </>
+            )}
+          </svg>
+
+          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between rounded-md bg-[rgba(0,0,0,0.8)] px-2.5 py-1 font-mono-ui text-[10px] text-[var(--sun)] border border-white/10">
+            <span>{levelConfig.badge}</span>
+            <span className="font-bold text-white">Écart: {levelConfig.distanceMeters}</span>
+          </div>
+        </div>
+      );
+    }
+
+    function HomeScreen({ onNavigate }) {
+      return (
+        <main className="mx-auto max-w-[1000px] px-5 py-8 sm:px-8">
+          <header className="text-center py-6">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--court)] shadow-[4px_4px_0_var(--sun)] mb-4">
+              <KinBallVector size={38} color="var(--ink)" />
+            </div>
+            <h1 className="font-display text-4xl sm:text-5xl font-black uppercase tracking-tight text-[var(--ink)]">
+              Kin-Ball Trainer
+            </h1>
+            <p className="mt-2 text-sm font-medium text-[var(--ink-soft)] max-w-md mx-auto">
+              L'application d'entraînement physique et réactif dédiée aux joueurs de Kin-Ball.
+            </p>
+          </header>
+
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => onNavigate('warmup')}
+              className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border-2 border-[var(--line)] bg-[var(--chalk)] p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[var(--court)] hover:shadow-md"
+            >
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                  <Icon name="flame" size={24} />
+                </div>
+                <p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-wider text-amber-600">Préparation</p>
+                <h2 className="mt-1 font-display text-2xl font-bold uppercase leading-tight text-[var(--ink)]">
+                  Échauffement
+                </h2>
+                <p className="mt-2 text-xs text-[var(--ink-soft)]">
+                  Exercices guidés de mobilité, démo mascotte et réactivation articulaire.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-display text-xs font-bold uppercase text-[var(--court-deep)]">
+                <span>Accéder</span>
+                <Icon name="arrow-right" size={16} />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('home-exercises')}
+              className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border-2 border-[var(--court)] bg-[var(--ink)] p-6 text-left text-white shadow-lg shadow-[var(--court)]/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            >
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--court)] text-[var(--ink)] shadow-[2px_2px_0_var(--sun)]">
+                  <Icon name="home" size={24} />
+                </div>
+                <p className="mt-6 font-mono-ui text-[10px] uppercase tracking-wider text-[var(--sun)]">Entraînement Solo</p>
+                <h2 className="mt-1 font-display text-2xl font-bold uppercase leading-tight text-[var(--chalk)]">
+                  Exercices Maison
+                </h2>
+                <p className="mt-2 text-xs text-[rgba(245,240,229,.7)]">
+                  Appels couleur, vitesse de réaction, départs explosifs et doubles séquences.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-display text-xs font-bold uppercase text-[var(--sun)]">
+                <span>Lancer l'entraînement</span>
+                <Icon name="arrow-right" size={16} />
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('gym-exercises')}
+              className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border-2 border-[var(--line)] bg-[var(--chalk)] p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[var(--court)] hover:shadow-md"
+            >
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                  <Icon name="dumbbell" size={24} />
+                </div>
+                <p className="mt-6 font-mono-ui text-[10px] font-bold uppercase tracking-wider text-blue-600">Terrain & Gym</p>
+                <h2 className="mt-1 font-display text-2xl font-bold uppercase leading-tight text-[var(--ink)]">
+                  Exercices Salle
+                </h2>
+                <p className="mt-2 text-xs text-[var(--ink-soft)]">
+                  Workouts collectifs, circuits grand terrain et ateliers tactiques sur vrai terrain.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-display text-xs font-bold uppercase text-[var(--court-deep)]">
+                <span>Découvrir</span>
+                <Icon name="arrow-right" size={16} />
+              </div>
+            </button>
+          </div>
+
+          <div className="mt-12 flex justify-center">
+            <CoatiVector size="w-32 h-32" />
+          </div>
+        </main>
+      );
+    }
+
+    function HomeExercisesListScreen({ onSelectExercise, onBackHome }) {
+      const exerciseIds = Object.keys(EXERCISES);
+
+      return (
+        <main className="mx-auto max-w-[1000px] px-5 pb-12 pt-6 sm:px-8">
+          <button
+            type="button"
+            onClick={onBackHome}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--chalk)] px-3.5 py-1.5 font-mono-ui text-xs uppercase font-bold text-[var(--ink-soft)] hover:text-[var(--ink)] mb-4"
+          >
+            <Icon name="arrow-left" size={15} /> Menu principal
+          </button>
+
+          <header className="flex flex-col items-start pb-6">
+            <SectionLabel>Espace Réactivité & Solo</SectionLabel>
+            <h1 className="mt-1 font-display text-3xl font-bold uppercase sm:text-[36px] leading-none">
+              EXERCICES <span className="text-[var(--court)]">MAISON</span>
+            </h1>
+            <p className="mt-2 text-xs text-[var(--ink-soft)] max-w-md">
+              Sélectionne un exercice pour configurer tes paramètres de séance, voir la démo et lancer l'entraînement.
+            </p>
+          </header>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {exerciseIds.map((id, index) => {
+              const ex = EXERCISES[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onSelectExercise(id)}
+                  className="group relative overflow-hidden rounded-[24px] border-2 border-[var(--line)] bg-[var(--chalk)] p-6 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[var(--court)] hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--paper)] text-[var(--court-deep)] group-hover:bg-[var(--court)] group-hover:text-[var(--ink)] transition-colors">
+                      <Icon name={ex.icon} size={22} />
+                    </span>
+                    <span className="font-mono-ui text-xs font-bold text-[var(--ink-soft)] opacity-60">
+                      0{index + 1}
+                    </span>
+                  </div>
+                  <p className="mt-4 font-mono-ui text-[10px] uppercase font-bold tracking-wider text-[var(--court-deep)]">{ex.eyebrow}</p>
+                  <h2 className="mt-1 font-display text-2xl font-bold uppercase text-[var(--ink)]">{ex.name}</h2>
+                  <p className="mt-2 text-xs text-[var(--ink-soft)] leading-relaxed">{ex.short}</p>
+
+                  <div className="mt-6 flex items-center justify-between border-t border-[var(--line)] pt-3 font-mono-ui text-[10px] font-bold uppercase text-[var(--court-deep)]">
+                    <span>Configurer & Lancer</span>
+                    <Icon name="arrow-right" size={14} className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 flex items-center justify-center gap-4 rounded-2xl border border-[var(--line)] bg-[var(--chalk)] p-4 shadow-sm">
+            <CoatiVector size="w-16 h-16" />
+            <p className="text-xs text-[var(--ink-soft)] max-w-md font-medium">
+              Chaque exercice possède sa propre page dédiée pour ajuster le temps, la fréquence des appels et voir la démo dynamique.
+            </p>
+          </div>
+        </main>
+      );
+    }
+
+    function ExerciseDetailConfigScreen({ exerciseId, config, onUpdateConfig, onStart, onBack }) {
+      const ex = EXERCISES[exerciseId];
+      if (!ex) return null;
+
+      const toggleColor = (colorId) => {
+        const currentColors = config.colors || ['BLEU', 'GRIS', 'NOIR'];
+        if (currentColors.includes(colorId)) {
+          if (currentColors.length > 1) {
+            onUpdateConfig({ colors: currentColors.filter(c => c !== colorId) });
+          }
+        } else {
+          onUpdateConfig({ colors: [...currentColors, colorId] });
+        }
+      };
+
+      return (
+        <main className="mx-auto max-w-[1100px] px-5 pb-20 pt-6 sm:px-8">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--chalk)] px-3.5 py-1.5 font-mono-ui text-xs uppercase font-bold text-[var(--ink-soft)] hover:text-[var(--ink)] mb-4"
+          >
+            <Icon name="arrow-left" size={15} /> Liste des exercices
+          </button>
+
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-6">
+            <div>
+              <SectionLabel>{ex.eyebrow}</SectionLabel>
+              <h1 className="mt-1 font-display text-3xl sm:text-4xl font-bold uppercase text-[var(--ink)]">{ex.name}</h1>
+              <p className="mt-1 text-xs text-[var(--ink-soft)] max-w-lg">{ex.description}</p>
+            </div>
+            <CoatiVector size="w-20 h-20" />
+          </header>
+
+          <div className="mt-8 grid gap-8 lg:grid-cols-12">
+            <div className="space-y-6 lg:col-span-6">
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--chalk)] p-5 shadow-sm">
+                <SectionLabel>1. Distance & Visualisation Terrain</SectionLabel>
+                
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {Object.keys(DIFFICULTY_LEVELS).map((lvlKey) => {
+                    const lvl = DIFFICULTY_LEVELS[lvlKey];
+                    const active = config.level === lvlKey;
+                    return (
+                      <button
+                        key={lvlKey}
+                        type="button"
+                        onClick={() => onUpdateConfig({ level: lvlKey })}
+                        className={`rounded-xl p-2 text-center transition-all ${active ? 'bg-[var(--court)] text-white font-bold shadow-sm' : 'bg-[var(--paper)] text-[var(--ink-soft)] hover:bg-white'}`}
+                      >
+                        <p className="font-mono-ui text-[9px] uppercase">{lvl.label.split('·')[0]}</p>
+                        <p className="mt-0.5 font-display text-xs">{lvl.distanceMeters}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4">
+                  <CourtAnimation exerciseId={exerciseId} difficultyLevel={config.level || 'niveau1'} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--chalk)] p-5 shadow-sm">
+                <SectionLabel>Consignes d'exécution</SectionLabel>
+                <div className="mt-3 space-y-3">
+                  {ex.steps.map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-3 text-xs">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--court)] font-mono-ui text-[10px] font-bold text-[var(--ink)]">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <strong className="font-display uppercase text-[var(--ink)]">{step.title} : </strong>
+                        <span className="text-[var(--ink-soft)]">{step.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-xl border border-[var(--sun)] bg-amber-50/60 p-3 text-xs text-amber-950">
+                  <strong>💡 Conseil Mascotte : </strong>{ex.advice}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 lg:col-span-6">
+              <div className="rounded-2xl border-2 border-[var(--court)] bg-[var(--chalk)] p-6 shadow-md">
+                <SectionLabel>2. Paramètres de la séance</SectionLabel>
+
+                <div className="mt-5 space-y-6">
+                  <div>
+                    <div className="flex justify-between font-mono-ui text-xs mb-1">
+                      <span className="font-bold">Durée totale</span>
+                      <strong className="text-[var(--court-deep)]">{config.work} secondes</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min={15}
+                      max={180}
+                      step={15}
+                      value={config.work}
+                      onChange={(e) => onUpdateConfig({ work: Number(e.target.value) })}
+                      className="w-full accent-[var(--court)] h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between font-mono-ui text-[9px] text-[var(--ink-soft)] mt-1">
+                      <span>15s</span>
+                      <span>1 min</span>
+                      <span>3 min</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-display text-xs font-bold uppercase text-[var(--ink)]">Rythme des annonces</p>
+                        <p className="text-[10px] text-[var(--ink-soft)]">Aléatoire (3-8s) pour forcer le réflexe</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateConfig({ isRandomRest: !config.isRandomRest })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${config.isRandomRest ? 'bg-[var(--court)]' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.isRandomRest ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+
+                    {!config.isRandomRest ? (
+                      <div>
+                        <div className="flex justify-between font-mono-ui text-xs mb-1">
+                          <span>Temps fixe entre chaque appel</span>
+                          <strong>{config.restFixed}s</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min={2}
+                          max={12}
+                          value={config.restFixed}
+                          onChange={(e) => onUpdateConfig({ restFixed: Number(e.target.value) })}
+                          className="w-full accent-[var(--court)]"
+                        />
+                      </div>
+                    ) : (
+                      <p className="font-mono-ui text-[11px] font-bold text-[var(--court-deep)] bg-white p-2 rounded-lg border border-[var(--line)] text-center">
+                        🎲 Temps d'attente aléatoire entre 3s et 8s
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="font-display text-xs font-bold uppercase text-[var(--ink)] mb-2">Couleurs actives</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {ALL_SIGNALS.map((sig) => {
+                        const active = (config.colors || ['BLEU', 'GRIS', 'NOIR']).includes(sig.id);
+                        return (
+                          <button
+                            key={sig.id}
+                            type="button"
+                            onClick={() => toggleColor(sig.id)}
+                            className={`flex items-center justify-center gap-2 rounded-xl p-2.5 font-mono-ui text-xs font-bold transition-all border ${active ? 'border-[var(--ink)] text-white shadow-sm' : 'border-gray-200 bg-gray-100 text-gray-400 opacity-60'}`}
+                            style={{ backgroundColor: active ? sig.hex : undefined }}
+                          >
+                            <Icon name={active ? "check-circle-2" : "circle"} size={14} />
+                            <span>{sig.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[var(--line)] pt-4">
+                    <div>
+                      <p className="font-display text-xs font-bold uppercase text-[var(--ink)]">Décompte de départ</p>
+                      <p className="text-[10px] text-[var(--ink-soft)]">Temps pour se placer au centre</p>
+                    </div>
+                    <select
+                      value={config.countdown}
+                      onChange={(e) => onUpdateConfig({ countdown: Number(e.target.value) })}
+                      className="rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-1.5 font-mono-ui text-xs font-bold text-[var(--ink)]"
+                    >
+                      <option value={3}>3 secondes</option>
+                      <option value={5}>5 secondes</option>
+                      <option value={0}>Sans décompte</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onStart}
+                  className="mt-8 flex min-h-[60px] w-full items-center justify-between rounded-2xl bg-[var(--court)] px-6 font-display text-xl font-bold uppercase text-[var(--ink)] shadow-[4px_4px_0_var(--sun)] hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                >
+                  <span>DÉMARRER LA SÉANCE</span>
+                  <Icon name="play" size={22} fill="currentColor" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    function TrainingScreen({ exercise, work, phase, signals, sessionLeft, restLeft, signalCount, countdownLeft, onStop }) {
+      const detail = EXERCISES[exercise];
+      const progress = Math.max(0, Math.min(100, ((work - sessionLeft) / work) * 100));
+
+      return (
+        <main className="min-h-[100dvh] bg-[var(--ink)] px-5 py-6 text-[var(--chalk)] sm:px-8 lg:px-12 flex flex-col justify-between">
+          <div className="mx-auto w-full max-w-[1120px]">
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={onStop} className="flex items-center gap-2 font-mono-ui text-xs uppercase text-[rgba(245,240,229,.58)] hover:text-white">
+                <Icon name="arrow-left" size={16} /> Quitter
+              </button>
+              <div className="font-mono-ui text-xs uppercase font-bold text-[var(--court)]">Séance en cours</div>
+            </div>
+
+            <div className="mt-6 flex items-end justify-between border-b border-[rgba(245,240,229,.13)] pb-4">
+              <div>
+                <SectionLabel dark>{detail.name}</SectionLabel>
+                <p className="mt-1 font-mono-ui text-xs text-[rgba(245,240,229,.6)]">{detail.instruction}</p>
+              </div>
+              <div className="font-mono-ui text-3xl font-bold text-[var(--sun)]">{formatDuration(sessionLeft)}</div>
+            </div>
+
+            <div className="my-16 text-center">
+              {phase === 'countdown' ? (
+                <div className="space-y-4">
+                  <p className="font-mono-ui text-xs uppercase text-[var(--sun)] tracking-widest">Mets-toi en position au centre</p>
+                  <div className="font-display text-8xl font-black text-[var(--chalk)] animate-bounce">{countdownLeft}</div>
+                </div>
+              ) : phase === 'ready' ? (
+                <div className="space-y-3">
+                  <div className="font-display text-5xl font-black text-[var(--chalk)]">PRÉPARE-TOI</div>
+                  <p className="font-mono-ui text-xs text-[var(--sun)]">Écoute l'annonce vocale !</p>
+                </div>
+              ) : (
+                <div className="inline-block rounded-3xl p-8 text-center shadow-2xl transition-all duration-300" style={{ backgroundColor: signals[0]?.hex || 'var(--court)' }}>
+                  <p className="font-mono-ui text-xs uppercase text-white/80 font-bold">Appel #{signalCount}</p>
+                  <h1 className="mt-2 font-display text-5xl sm:text-7xl font-black uppercase text-white tracking-wide">
+                    {signals.map(s => s.name).join(' + ')}
+                  </h1>
+                </div>
+              )}
+
+              {phase === 'rest' && (
+                <p className="mt-8 font-mono-ui text-sm text-[var(--sun)] font-bold">
+                  Prochain appel dans : {restLeft}s
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mx-auto w-full max-w-[1120px] pb-6">
+            <div className="h-3 w-full overflow-hidden rounded-full bg-white/10 mb-6">
+              <div className="h-full bg-[var(--court)] transition-all duration-300" style={{ width: `${progress}%` }} />
+            </div>
+
+            <div className="text-center">
+              <button type="button" onClick={onStop} className="rounded-2xl border-2 border-red-500/50 bg-red-500/10 px-8 py-3 font-mono-ui text-xs font-bold uppercase text-red-400 hover:bg-red-500 hover:text-white transition-all">
+                Arrêter l'entraînement
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    function Shell({ children, screen, onNavigate, onGoHome }) {
+      const [mobileOpen, setMobileOpen] = useState(false);
+      
+      const navigation = [
+        { id: 'home', label: 'Accueil Principal', icon: 'layout-grid' },
+        { id: 'home-exercises', label: 'Exercices Maison', icon: 'home' },
+        { id: 'warmup', label: 'Échauffement', icon: 'flame' },
+        { id: 'gym-exercises', label: 'Exercices Salle', icon: 'dumbbell' },
+        { id: 'about', label: 'À propos', icon: 'info' },
+      ];
+
+      return (
+        <div className="min-h-[100dvh] bg-[var(--paper)] text-[var(--ink)]">
+          <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col bg-[var(--ink)] px-6 py-7 text-[var(--chalk)] lg:flex">
+            <BrandLockup onClick={onGoHome} />
+            <div className="mt-12">
+              <SectionLabel dark>Navigation</SectionLabel>
+              <nav className="mt-4 space-y-1.5">
+                {navigation.map(({ id, label, icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onNavigate(id)}
+                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold transition-all duration-200 ${screen === id ? 'bg-[var(--court)] text-[var(--ink)] shadow-[3px_3px_0_var(--sun)]' : 'text-[rgba(245,240,229,.62)] hover:bg-[rgba(245,240,229,.08)] hover:text-[var(--chalk)]'}`}
+                  >
+                    <Icon name={icon} size={16} strokeWidth={2.2} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </aside>
+
+          <div className="lg:pl-[232px]">
+            {screen !== 'training' && (
+              <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--line)] bg-[rgba(251,248,240,.92)] px-5 py-3.5 backdrop-blur-md sm:px-8 lg:hidden">
+                <BrandLockup compact onClick={onGoHome} />
+                <div className="flex items-center gap-3">
+                  <span className="font-mono-ui text-[10px] font-bold uppercase tracking-wider text-[var(--ink-soft)]">
+                    {mobileOpen ? 'Fermer' : 'Menu'}
+                  </span>
+                  <KinBallMenuButton isOpen={mobileOpen} onClick={() => setMobileOpen(!mobileOpen)} />
+                </div>
+              </header>
+            )}
+
+            {mobileOpen && (
+              <div className="fixed inset-x-0 top-[73px] z-30 border-b-2 border-[var(--ink)] bg-[var(--paper)]/95 px-6 py-6 shadow-2xl backdrop-blur-xl lg:hidden max-h-[calc(100vh-80px)] overflow-y-auto">
+                <SectionLabel>Navigation Rapide</SectionLabel>
+                <nav className="mt-4 grid gap-2.5">
+                  {navigation.map(({ id, label, icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => { onNavigate(id); setMobileOpen(false); }}
+                      className={`flex items-center justify-between rounded-2xl p-3.5 text-sm font-bold transition-all ${screen === id ? 'bg-[var(--ink)] text-[var(--chalk)] shadow-[3px_3px_0_var(--sun)]' : 'bg-[var(--chalk)] text-[var(--ink)] border border-[var(--line)]'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon name={icon} size={18} className={screen === id ? 'text-[var(--sun)]' : 'text-[var(--court-deep)]'} />
+                        <span>{label}</span>
+                      </div>
+                      <Icon name="chevron-right" size={16} />
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )}
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [screen, setScreen] = useState('home');
+      const [selectedExerciseId, setSelectedExerciseId] = useState('appel');
+      const [configs, setConfigs] = useState(DEFAULT_CONFIGS);
+      
+      const [activeSession, setActiveSession] = useState(null);
+      const [phase, setPhase] = useState('ready');
+      const [signals, setSignals] = useState([]);
+      const [sequenceCount, setSequenceCount] = useState(0);
+      const [sessionLeft, setSessionLeft] = useState(60);
+      const [restLeft, setRestLeft] = useState(0);
+      const [countdownLeft, setCountdownLeft] = useState(3);
+      
+      const [sessionEndAt, setSessionEndAt] = useState(null);
+      const [restDeadline, setRestDeadline] = useState(null);
+      const [now, setNow] = useState(Date.now());
+
+      const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      const handleNavigate = (targetScreen) => {
+        setScreen(targetScreen);
+        scrollToTop();
+      };
+
+      const speak = useCallback((text) => {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'fr-FR';
+        utterance.rate = 1.8;
+        window.speechSynthesis.speak(utterance);
+      }, []);
+
+      const stopSpeech = useCallback(() => {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }, []);
+
+      const updateCurrentConfig = (newPartial) => {
+        setConfigs(prev => ({
+          ...prev,
+          [selectedExerciseId]: { ...prev[selectedExerciseId], ...newPartial }
+        }));
+      };
+
+      const triggerSequence = useCallback((timestamp, config) => {
+        const activeColorIds = config.colors && config.colors.length > 0 ? config.colors : ['BLEU', 'GRIS', 'NOIR'];
+        const availableSignals = ALL_SIGNALS.filter(s => activeColorIds.includes(s.id));
+
+        let nextSignals;
+        if (config.exercise === 'double') {
+          const first = Math.floor(Math.random() * availableSignals.length);
+          let second = Math.floor(Math.random() * availableSignals.length);
+          if (availableSignals.length > 1) {
+            while (second === first) second = Math.floor(Math.random() * availableSignals.length);
+          }
+          nextSignals = [availableSignals[first], availableSignals[second]];
+        } else {
+          nextSignals = [availableSignals[Math.floor(Math.random() * availableSignals.length)]];
+        }
+
+        setSignals(nextSignals);
+        setSequenceCount((v) => v + 1);
+        setPhase('rest');
+
+        let delaySec = config.restFixed;
+        if (config.isRandomRest) {
+          delaySec = Math.floor(Math.random() * (config.restMax - config.restMin + 1)) + config.restMin;
+        }
+
+        setRestLeft(delaySec);
+        setRestDeadline(timestamp + delaySec * 1000);
+
+        if (config.exercise === 'plot-sprint') speak(`Touche le plot, puis ${nextSignals[0].name}`);
+        else if (config.exercise === 'double') speak(`${nextSignals[0].name} puis ${nextSignals[1].name}`);
+        else speak(`Omnikin ${nextSignals[0].name}`);
+      }, [speak]);
+
+      useEffect(() => {
+        if (screen !== 'training' || !sessionEndAt) return;
+        const interval = setInterval(() => setNow(Date.now()), 200);
+        return () => clearInterval(interval);
+      }, [screen, sessionEndAt]);
+
+      useEffect(() => {
+        if (screen !== 'training' || !sessionEndAt || !activeSession) return;
+        const remaining = Math.max(0, Math.ceil((sessionEndAt - now) / 1000));
+        setSessionLeft(remaining);
+
+        if (remaining <= 0) {
+          handleNavigate('exercise-detail');
+          return;
+        }
+
+        if (phase === 'countdown') {
+          const cdRem = Math.max(0, Math.ceil((restDeadline - now) / 1000));
+          setCountdownLeft(cdRem);
+          if (now >= restDeadline) {
+            triggerSequence(now, activeSession);
+          }
+        } else if (phase === 'rest' && restDeadline) {
+          const restRem = Math.max(0, Math.ceil((restDeadline - now) / 1000));
+          setRestLeft(restRem);
+          if (now >= restDeadline) {
+            triggerSequence(now, activeSession);
+          }
+        }
+      }, [now, screen, sessionEndAt, activeSession, phase, restDeadline, triggerSequence]);
+
+      const startTraining = () => {
+        stopSpeech();
+        const config = { exercise: selectedExerciseId, ...configs[selectedExerciseId] };
+        const startedAt = Date.now();
+        setActiveSession(config);
+        setSignals([]);
+        setSequenceCount(0);
+        setSessionLeft(config.work);
+
+        if (config.countdown > 0) {
+          setPhase('countdown');
+          setCountdownLeft(config.countdown);
+          setRestDeadline(startedAt + config.countdown * 1000);
+          speak(`Départ dans ${config.countdown}`);
+        } else {
+          setPhase('ready');
+          setRestDeadline(startedAt + 1000);
+        }
+
+        setSessionEndAt(startedAt + config.work * 1000);
+        setNow(startedAt);
+        handleNavigate('training');
+      };
+
+      const stopTraining = () => {
+        stopSpeech();
+        setSessionEndAt(null);
+        setActiveSession(null);
+        handleNavigate('exercise-detail');
+      };
+
+      return (
+        <Shell screen={screen} onNavigate={handleNavigate} onGoHome={() => handleNavigate('home')}>
+          {screen === 'home' && <HomeScreen onNavigate={handleNavigate} />}
+          {screen === 'home-exercises' && (
+            <HomeExercisesListScreen
+              onSelectExercise={(id) => { setSelectedExerciseId(id); handleNavigate('exercise-detail'); }}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+          {screen === 'exercise-detail' && (
+            <ExerciseDetailConfigScreen
+              exerciseId={selectedExerciseId}
+              config={configs[selectedExerciseId]}
+              onUpdateConfig={updateCurrentConfig}
+              onStart={startTraining}
+              onBack={() => handleNavigate('home-exercises')}
+            />
+          )}
+          {screen === 'warmup' && <WarmupPage onBack={() => handleNavigate('home')} />}
+          {screen === 'gym-exercises' && <GymExercisesPage onBack={() => handleNavigate('home')} />}
+          {screen === 'about' && <AboutPage onBack={() => handleNavigate('home')} />}
+          {screen === 'training' && activeSession && (
+            <TrainingScreen
+              exercise={activeSession.exercise}
+              work={activeSession.work}
+              phase={phase}
+              signals={signals}
+              sessionLeft={sessionLeft}
+              restLeft={restLeft}
+              signalCount={sequenceCount}
+              countdownLeft={countdownLeft}
+              onStop={stopTraining}
+            />
+          )}
+        </Shell>
+      );
+    }
+
+    function WarmupPage({ onBack }) {
+      const [selectedEx, setSelectedEx] = useState(null);
+
+      return (
+        <main className="mx-auto max-w-[1000px] px-5 py-8 sm:px-8">
+          <button type="button" onClick={onBack} className="flex items-center gap-2 font-mono-ui text-xs uppercase font-bold text-[var(--court-deep)] mb-6">
+            <Icon name="arrow-left" size={16} /> Retour à l'accueil
+          </button>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--line)] pb-6">
+            <div>
+              <SectionLabel>Préparation physique</SectionLabel>
+              <h1 className="mt-1 font-display text-3xl font-bold uppercase text-[var(--ink)]">Programme d'Échauffement</h1>
+              <p className="mt-1 text-xs text-[var(--ink-soft)] max-w-lg">Clique sur un exercice pour découvrir la démonstration et les détails ciblés.</p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {WARMUP_EXERCISES.map((w, idx) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => setSelectedEx(w)}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border-2 border-[var(--line)] bg-[var(--chalk)] p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[var(--court)] hover:shadow-md"
+              >
+                <div>
+                  <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+                    <span className="font-mono-ui text-xs font-bold text-[var(--court-deep)]">0{idx + 1}.</span>
+                    <span className="font-mono-ui text-[10px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded font-bold">{w.duration}</span>
+                  </div>
+
+                  <div className="mt-4 flex justify-center py-2 bg-[var(--paper)] rounded-xl border border-[var(--line)]">
+                    <CoatiVector size="w-20 h-20" />
+                  </div>
+
+                  <h3 className="mt-3 font-display text-sm font-bold uppercase leading-snug text-[var(--ink)]">{w.title}</h3>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between font-mono-ui text-[10px] font-bold uppercase text-[var(--court-deep)] border-t border-[var(--line)] pt-2.5">
+                  <span>Voir le détail</span>
+                  <Icon name="chevron-right" size={14} />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {selectedEx && (
+            <div className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+              <div className="relative w-full max-w-lg rounded-3xl border-2 border-[var(--line)] bg-[var(--chalk)] p-6 shadow-2xl">
+                <button type="button" onClick={() => setSelectedEx(null)} className="absolute top-4 right-4 text-[var(--ink)]">
+                  <Icon name="x" size={20} />
+                </button>
+                <h3 className="font-display text-xl font-bold uppercase text-[var(--ink)]">{selectedEx.title}</h3>
+                <p className="mt-2 text-xs text-[var(--ink-soft)]">{selectedEx.desc}</p>
+                <button type="button" onClick={() => setSelectedEx(null)} className="mt-6 w-full rounded-2xl bg-[var(--ink)] py-3 font-display text-xs font-bold uppercase text-white">Fermer</button>
+              </div>
+            </div>
+          )}
+        </main>
+      );
+    }
+
+    function GymExercisesPage({ onBack }) {
+      return (
+        <main className="mx-auto max-w-[1000px] px-5 py-8 sm:px-8">
+          <button type="button" onClick={onBack} className="flex items-center gap-2 font-mono-ui text-xs uppercase font-bold text-[var(--court-deep)] mb-6">
+            <Icon name="arrow-left" size={16} /> Retour à l'accueil
+          </button>
+          <SectionLabel>Terrain Officiel</SectionLabel>
+          <h1 className="mt-1 font-display text-3xl font-bold uppercase text-[var(--ink)]">Exercices en Salle</h1>
+          <p className="mt-2 text-xs text-[var(--ink-soft)]">Module en cours de préparation pour le travail d'équipe sur grand terrain.</p>
+        </main>
+      );
+    }
+
+    function AboutPage({ onBack }) {
+      return (
+        <main className="mx-auto max-w-[800px] px-5 py-8 sm:px-8">
+          <button type="button" onClick={onBack} className="flex items-center gap-2 font-mono-ui text-xs uppercase font-bold text-[var(--court-deep)] mb-6">
+            <Icon name="arrow-left" size={16} /> Retour à l'accueil
+          </button>
+          <SectionLabel>À propos</SectionLabel>
+          <h1 className="mt-1 font-display text-3xl font-bold uppercase text-[var(--ink)]">Kin-Ball Trainer Pro</h1>
+          <p className="mt-4 text-xs text-[var(--ink-soft)] leading-relaxed">
+            Application conçue pour perfectionner la vitesse d'action-réaction des joueurs de Kin-Ball.
+          </p>
+        </main>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
